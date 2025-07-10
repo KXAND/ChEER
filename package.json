@@ -1,0 +1,90 @@
+{
+  "name": "cheer",
+  "displayName": "ChEER: Chinese Editing Enhancment & Refinement",
+  "description": "Enhance your Chinese Editing Experience.",
+  "publisher": "Quicsand",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.101.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/KXAND/ChEER.git"
+  },
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [],
+    "keybindings": [
+      {
+        "command": "CHEER.SmartDelete",
+        "key": "backspace",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "type",
+        "key": "type",
+        "when": "editorTextFocus"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "ChEER configuration",
+      "properties": {
+        "CHEER.activationOnLanguage": {
+          "type": "array",
+          "default": [
+            "plaintext",
+            "markdown",
+            "Latex"
+          ],
+          "description": "设置会激活 ChEER 的语言环境。（目前, ChEER 主要是为 Markdown 提供的）",
+          "scope": "resource"
+        },
+        "CHEER.enablePairedInputAndDeleteSymbols": {
+          "type": "boolean",
+          "default": true,
+          "description": "启用成对符号成对输入成对删除",
+          "scope": "resource"
+        },
+        "CHEER.enableContinuousInputCorrection": {
+          "type": "boolean",
+          "default": true,
+          "description": "启用连续输入中文字符将转换为对应的拉丁字符 如: 《《 -> <",
+          "scope": "resource"
+        },
+        "CHEER.enableEmptyListItemDeletionEnhanced": {
+          "type": "boolean",
+          "default": false,
+          "description": "启用一键删除整个空列表项",
+          "scope": "resource"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.6",
+    "@types/node": "18.x",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^6.15.0",
+    "@typescript-eslint/parser": "^6.15.0",
+    "@vscode/test-cli": "^0.0.4",
+    "@vscode/test-electron": "^2.3.8",
+    "eslint": "^8.56.0",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {}
+}
