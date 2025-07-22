@@ -46,8 +46,6 @@ export const selectionInsertMap = new Map<string, { left: string; right: string 
     ['`', { left: '`', right: '`' }],
     ['～', { left: '~', right: '~' }],
     ['~', { left: '~', right: '~' }],
-    ['＊', { left: '*', right: '*' }],
-    ['*', { left: '*', right: '*' }],
 ]);
 
 export const continuousInputCorrectionRules: { input: string, env: string; result: string }[] = ([
@@ -80,6 +78,7 @@ export const continuousInputCorrectionRules: { input: string, env: string; resul
     { input: "\'", env: "\'|", result: "\'|\'" },
     //其它符号
     { input: "：", env: "：", result: ": " },
+    { input: "、", env: "、", result: "\\" },
     // Markdown 符号
     { input: "￥", env: "￥", result: "$|$" },
     { input: "$", env: "$", result: "$|$" },
@@ -113,7 +112,7 @@ export const deletionRules: { left: string; right: string }[] = [
     { left: '"', right: '"' },
     { left: '`', right: '`' },
     { left: '$', right: '$' },
-
+    { left: '*', right: '*' },
 
 ];
 

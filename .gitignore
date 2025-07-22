@@ -6,4 +6,3 @@ node_modules
 testText.txt
 .vscode
 package-lock.json
-*.code-workspace

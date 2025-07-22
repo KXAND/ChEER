@@ -19,7 +19,36 @@ export function activate(context: vscode.ExtensionContext) {
 
 // This method is called when your extension is deactivated
 export function deactivate() { }
-const debugOutput = vscode.window.createOutputChannel("ChEER Debug");
+
+
+class debugOutput {
+	enableDebug: boolean | undefined = false;
+	private _output: vscode.OutputChannel;
+	private static _instance: debugOutput;
+	constructor() {
+		this._output = vscode.window.createOutputChannel("ChEER Debug");
+	}
+	public static instance() {
+		if (!this._instance)
+			this._instance = new debugOutput();
+		return this._instance;
+	}
+	public static appendLine(str: string) {
+		if (this.instance().enableDebug) {
+			this.instance()._output.appendLine(str);
+		}
+	}
+}
+
+
+// @todo
+// 1. 成对删除``和""，~~
+// 2. 代码块判断前面是否有字
+// 3. <<>>
+// 4. 引用块粘贴自动添加> 
+// 5. 行首字符错误的undo
+// 6. 允许取消debug
+
 
 /**
  * case1: 中文替换：
@@ -76,6 +105,8 @@ async function handleType(args: { text: string }) {
 		applyEdits(editor, edits)
 		return;
 	}
+
+	debugOutput.instance().enableDebug = config.get('enableDebugOutput');
 
 	const document = editor.document;
 	const edits: iEdit[] = [];
@@ -251,6 +282,8 @@ async function handleDeletion() {
 	if ((languages.indexOf("*") === -1 && languages.indexOf(languageId) === -1)) {
 		return vscode.commands.executeCommand('deleteLeft');
 	}
+
+	debugOutput.instance().enableDebug = config.get('enableDebugOutput');
 
 	// @todo：考虑能成对的地方进行成对删除，不能成对的地方普通删除。但是暂时不知道怎么处理这种混合删除的情况
 	const document = editor.document;

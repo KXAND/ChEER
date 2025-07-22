@@ -3,7 +3,7 @@
   "displayName": "ChEER: Chinese Editing Enhancment & Refinement",
   "description": "Enhance your Chinese Editing Experience.",
   "publisher": "Quicsand",
-  "version": "0.0.1",
+  "version": "0.0.12",
   "engines": {
     "vscode": "^1.101.0"
   },
@@ -39,11 +39,15 @@
         "CHEER.activationOnLanguage": {
           "type": "array",
           "default": [
-            "plaintext",
-            "markdown",
-            "Latex"
+            "*"
           ],
           "description": "设置会激活 ChEER 的语言环境。（目前, ChEER 主要是为 Markdown 提供的）",
+          "scope": "resource"
+        },
+        "CHEER.enableDebugOutput": {
+          "type": "boolean",
+          "default": false,
+          "description": "启用输出调试信息",
           "scope": "resource"
         },
         "CHEER.enablePairedInputAndDeleteSymbols": {
