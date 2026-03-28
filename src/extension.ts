@@ -1,16 +1,50 @@
 import * as vscode from 'vscode';
 import { continuousInputCorrectionRules, selectionInsertMap, selectionReplaceMap, deletionRules, multiLinesDeletionRules, cjkPairMap } from './rules';
 
+class CompositionState {
+	isInComposition: boolean = false;
+	insertedText: boolean = false;
+	composingText: string = '';
+	selections: vscode.Selection[] = [];
+	selectionTexts: string[] = [];
+
+	reset() {
+		this.isInComposition = false;
+		this.insertedText = false;
+		this.composingText = '';
+		this.selections = [];
+		this.selectionTexts = [];
+	}
+}
+
+const compositionState = new CompositionState();
+
+interface ContinuousCorrectionUndoEntry {
+	uri: string;
+	start: vscode.Position;
+	beforeText: string;
+	afterText: string;
+	beforeSelections: vscode.Selection[];
+	afterVersion: number;
+	restored: boolean;
+}
+export interface iEdit {
+	range: vscode.Range;
+	text: string;
+	newRange: vscode.Range;
+	delta: number;
+}
+
+let continuousCorrectionUndoEntry: ContinuousCorrectionUndoEntry | undefined;
+
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
-	context.subscriptions.push(
-		vscode.workspace.onDidChangeTextDocument(event => {
-			void handlePairedInsertion(event);
-		})
-	);
-
 	context.subscriptions.push(vscode.commands.registerCommand('type', handleType));
+	context.subscriptions.push(vscode.commands.registerCommand('replacePreviousChar', handleReplacePreviousChar));
+	context.subscriptions.push(vscode.commands.registerCommand('compositionStart', handleCompositionStart));
+	context.subscriptions.push(vscode.commands.registerCommand('compositionEnd', handleCompositionEnd));
+	context.subscriptions.push(vscode.commands.registerCommand('undo', handleUndo));
 
 	context.subscriptions.push(vscode.commands.registerCommand('CHEER.SmartDelete', handleDeletion));
 }
@@ -39,16 +73,6 @@ class debugOutput {
 	}
 }
 
-
-// @todo
-// 1. 成对删除``和""，~~
-// 2. 代码块判断前面是否有字
-// 3. <<>>
-// 4. 引用块粘贴自动添加> 
-// 5. 行首字符错误的undo
-// 6. 允许取消debug
-
-
 /**
  * case1: 中文替换：
  * 			- 第一次：selections：被替换的范围，event：被替换的范围
@@ -73,34 +97,72 @@ const isLanguageEnabled = (config: vscode.WorkspaceConfiguration, languageId: st
 	return languages.includes("*") || languages.includes(languageId);
 };
 
-export interface iEdit {
-	range: vscode.Range;
-	text: string;
-	newRange: vscode.Range;
-	delta: number;
+function clearContinuousCorrectionUndoState() {
+	continuousCorrectionUndoEntry = undefined;
 }
 
-// 适用 type 的input main logic
-async function handleType(args: { text: string }) {
+async function handleUndo() {
 	const editor = vscode.window.activeTextEditor;
-	if (!editor) {
-		return;
+	const state = continuousCorrectionUndoEntry;
+
+	if (!editor || !state || editor.document.uri.toString() !== state.uri) {
+		clearContinuousCorrectionUndoState();
+		debugOutput.appendLine("[Undo]: Dont have matched context.");
+		return vscode.commands.executeCommand('default:undo');
 	}
 
-	const text = args.text;
+	if (!state.restored) {
+		if (editor.document.version !== state.afterVersion) {
+			debugOutput.appendLine("[Undo]: document version already changed.");
+			clearContinuousCorrectionUndoState();
+			return vscode.commands.executeCommand('default:undo');
+		}
+
+		const startOffset = editor.document.offsetAt(state.start);
+		const end = editor.document.positionAt(startOffset + state.afterText.length);
+		const didApply = await editor.edit(editBuilder => {
+			editBuilder.replace(new vscode.Range(state.start, end), state.beforeText);
+		}, {
+			undoStopBefore: false,
+			undoStopAfter: false,
+		});
+
+		if (didApply) {
+			editor.selections = state.beforeSelections.map(selection =>
+				new vscode.Selection(selection.anchor, selection.active)
+			);
+			state.restored = true;
+			debugOutput.appendLine("[Undo]: apply ChEER undo entry.");
+			return;
+		}
+
+		clearContinuousCorrectionUndoState();
+	}
+
+	debugOutput.appendLine("[Undo]: ChEER undo entry already restored.");
+	clearContinuousCorrectionUndoState();
+
+	debugOutput.appendLine("[Undo]: undo.");
+	await vscode.commands.executeCommand('default:undo');
+	await vscode.commands.executeCommand('default:undo');
+	await vscode.commands.executeCommand('default:undo');
+	return vscode.commands.executeCommand('default:undo');
+}
+
+async function processTypeInput(editor: vscode.TextEditor, text: string, shouldUndoNativeInput: boolean) {
+	clearContinuousCorrectionUndoState();
 	const config = vscode.workspace.getConfiguration('CHEER', editor.document.uri);
 
 	if (text === "\n" || text === "\r\n") {
-		// 换行涉及到行号变化，直接用原生逻辑处理
-		return vscode.commands.executeCommand('default:type', args);
+		return vscode.commands.executeCommand('default:type', { text });
 	}
 	if (checkLatin.test(text)) {
-		return vscode.commands.executeCommand('default:type', args);
+		return vscode.commands.executeCommand('default:type', { text });
 	}
 
 	const languageId = editor.document.languageId;
 	if (!isLanguageEnabled(config, languageId)) {
-		if (checkCJKPunctuation.test(text) === true && editor.selection.isEmpty) {
+		if (shouldUndoNativeInput && checkCJKPunctuation.test(text) === true && editor.selection.isEmpty) {
 			await vscode.commands.executeCommand('undo');
 		}
 		const edits = [...editor.selections].map(e => typeEvent2iEdit(e, text));
@@ -112,9 +174,13 @@ async function handleType(args: { text: string }) {
 
 	const document = editor.document;
 	const edits: iEdit[] = [];
-	debugOutput.appendLine("Type in: " + args.text);
+	let hasContinuousCorrection = false;
+	let continuousCorrectionStateCandidate: Omit<ContinuousCorrectionUndoEntry, 'afterVersion' | 'restored'> | undefined;
+	debugOutput.appendLine("Type in: " + text);
 
-	if (text.length > 1 && text !== "……") { return; }
+	if (text.length > 1 && text !== "……") {
+		return vscode.commands.executeCommand('default:type', { text });
+	}
 
 	for (const selection of editor.selections) {
 		let edit = typeEvent2iEdit(selection, text);
@@ -122,16 +188,149 @@ async function handleType(args: { text: string }) {
 			edit = addPairedInput2Edits(selection, document, text, edits);
 		}
 		if (config.get('enableContinuousInputCorrection', true)) {
+			const rangeBeforeCorrection = edit.range;
+			const textBeforeCorrection = edit.text;
 			edit = addContinuousInputCorrection2Edits(document, edit, text);
+			if (!edit.range.isEqual(rangeBeforeCorrection) || edit.text !== textBeforeCorrection) {
+				hasContinuousCorrection = true;
+				if (editor.selections.length === 1 && !continuousCorrectionStateCandidate) {
+					continuousCorrectionStateCandidate = {
+						uri: editor.document.uri.toString(),
+						start: edit.range.start,
+						beforeText: document.getText(edit.range),
+						afterText: edit.text,
+						beforeSelections: editor.selections.map(currentSelection =>
+							new vscode.Selection(currentSelection.anchor, currentSelection.active)
+						),
+					};
+				}
+			}
 		}
 		edits.push(edit);
 	}
 
-	if (checkCJKPunctuation.test(text) === true && editor.selection.isEmpty) {
+	if (shouldUndoNativeInput && checkCJKPunctuation.test(text) === true && editor.selection.isEmpty) {
 		await vscode.commands.executeCommand('undo');
 	}
 	await applyEdits(editor, edits);
-	return;
+	if (hasContinuousCorrection && continuousCorrectionStateCandidate) {
+		continuousCorrectionUndoEntry = {
+			...continuousCorrectionStateCandidate,
+			afterVersion: editor.document.version,
+			restored: false,
+		};
+	}
+}
+
+// 适用 type 的input main logic
+async function handleType(args: { text: string }) {
+	const editor = vscode.window.activeTextEditor;
+	if (!editor) {
+		return;
+	}
+
+	const text = args.text;
+	if (compositionState.isInComposition) {
+		compositionState.composingText += text;
+		compositionState.insertedText = true;
+		return vscode.commands.executeCommand('default:type', args);
+	}
+
+	return processTypeInput(editor, text, true);
+}
+
+async function handleReplacePreviousChar(args: { replaceCharCnt: number; text: string }) {
+	if (compositionState.isInComposition) {
+		compositionState.composingText =
+			compositionState.composingText.substring(0, compositionState.composingText.length - args.replaceCharCnt) + args.text;
+		if (compositionState.insertedText) {
+			return vscode.commands.executeCommand('default:replacePreviousChar', args);
+		}
+	}
+
+	return vscode.commands.executeCommand('default:replacePreviousChar', args);
+}
+
+async function handleCompositionStart() {
+	compositionState.reset();
+	compositionState.isInComposition = true;
+	const editor = vscode.window.activeTextEditor;
+	if (editor) {
+		compositionState.selections = editor.selections.map(selection =>
+			new vscode.Selection(selection.anchor, selection.active)
+		);
+		compositionState.selectionTexts = editor.selections.map(selection =>
+			editor.document.getText(selection)
+		);
+	}
+}
+
+async function handleCompositionEnd() {
+	const editor = vscode.window.activeTextEditor;
+	if (!editor) {
+		compositionState.reset();
+		return;
+	}
+
+	const text = compositionState.composingText;
+	const compositionSelections = compositionState.selections.map(selection =>
+		new vscode.Selection(selection.anchor, selection.active)
+	);
+	const compositionSelectionTexts = [...compositionState.selectionTexts];
+	if (compositionState.insertedText) {
+		await vscode.commands.executeCommand('default:replacePreviousChar', {
+			text: '',
+			replaceCharCnt: text.length,
+		});
+	}
+
+	compositionState.reset();
+
+	if (text.length === 0) {
+		return;
+	}
+
+	if (text.length === 1 || text === "……") {
+		const originalSelections = editor.selections.map(selection =>
+			new vscode.Selection(selection.anchor, selection.active)
+		);
+		if (compositionSelections.some(selection => !selection.isEmpty)) {
+			const restoreTargets = compositionSelections.map((selection, index) => ({
+				selection,
+				text: compositionSelectionTexts[index] ?? '',
+			}));
+			const didRestore = await editor.edit(editBuilder => {
+				for (const target of restoreTargets
+					.slice()
+					.sort((a, b) => editor.document.offsetAt(b.selection.start) - editor.document.offsetAt(a.selection.start))) {
+					editBuilder.insert(target.selection.start, target.text);
+				}
+			}, {
+				undoStopBefore: false,
+				undoStopAfter: false,
+			});
+			if (didRestore) {
+				editor.selections = restoreTargets.map(target => {
+					const start = target.selection.start;
+					const startOffset = editor.document.offsetAt(start);
+					const end = editor.document.positionAt(startOffset + target.text.length);
+					return new vscode.Selection(start, end);
+				});
+			}
+		}
+		if (compositionSelections.length > 0) {
+			editor.selections = compositionSelections.map(selection =>
+				new vscode.Selection(selection.anchor, selection.active)
+			);
+		}
+		await processTypeInput(editor, text, false);
+		if (compositionSelections.length === 0) {
+			editor.selections = originalSelections;
+		}
+		return;
+	}
+
+	await vscode.commands.executeCommand('default:type', { text });
 }
 
 function addPairedInput2Edits(selection: vscode.Selection, document: vscode.TextDocument, inputText: string, outEdits: iEdit[]): iEdit {
@@ -285,7 +484,8 @@ async function handleDeletion() {
 	}
 
 	debugOutput.instance().enableDebug = config.get('enableDebugOutput');
-
+	debugOutput.appendLine("[delete]: enabled ChEER delete");
+	
 	// @todo：考虑能成对的地方进行成对删除，不能成对的地方普通删除。但是暂时不知道怎么处理这种混合删除的情况
 	const document = editor.document;
 	let pairedPositionNum = 0;// 只有全部符合成对的情况才成对删除，这是符合 vscode 默认逻辑的做法
@@ -305,6 +505,7 @@ async function handleDeletion() {
 				if (rule.left === strBefore && rule.right === strAfter) {
 					const deleteRange = new vscode.Range(position.translate(0, -rule.left.length), position.translate(0, rule.right.length));
 					deletions.push(deleteRange);
+					debugOutput.appendLine(`[delete]: delete  from ${strBefore} to ${strAfter} (${deleteRange.start},${deleteRange.end})`);
 					pairedPositionNum += 1;
 					break;
 				}
@@ -355,36 +556,14 @@ async function handleDeletion() {
 
 	}
 	if (pairedPositionNum === editor.selections.length) {
+		debugOutput.appendLine("[delete]: delete using ChEER");
 		await editor.edit(editBuilder => {
 			for (const range of deletions) { editBuilder.delete(range); }
 		});
 		return;
 	}
+	debugOutput.appendLine("[delete]: delete using VSCode default method");
 	return vscode.commands.executeCommand('deleteLeft');
-}
-
-async function handlePairedInsertion(event: vscode.TextDocumentChangeEvent) {
-	const editor = vscode.window.activeTextEditor;
-	if (!editor || (editor && event.document !== editor.document)) {
-		return;
-	}
-	if (event.contentChanges.length === 0 || event.contentChanges[0].text === '') { return; }
-
-	if (event.reason === vscode.TextDocumentChangeReason.Undo) { return; }
-	debugOutput.appendLine("event: " + event.contentChanges[0].text);
-
-	const text0 = event.contentChanges[0].text;
-
-	// 将中文输入分隔成新的撤销单元，避免撤销时撤销用户的输入
-	const chineseCharRegex = /^[\u4e00-\u9fa5\u3400-\u4dbf\uF900-\uFAFF]*$/;
-	if (chineseCharRegex.test(text0)) {
-
-		await editor.insertSnippet(
-			new vscode.SnippetString(''),      // 空片段
-			event.contentChanges[0].range.start.translate(0, text0.length), // 在当前光标位置
-			{ undoStopBefore: false, undoStopAfter: true }//undoStopBefore: false：插入的空字符和前面的中文是一体的，无需两次撤回
-		);
-	}
 }
 
 
