@@ -5,6 +5,8 @@ export const selectionReplaceMap = new Map<string, { left: string; right: string
     ["<", { left: "<", right: ">" }],
     ["（", { left: "（", right: "）" }],
     ["(", { left: "(", right: ")" }],
+    ["[", { left: "[", right: "]" }],
+    ["{", { left: "{", right: "}" }],
     // 引号
     ["“", { left: "“", right: "”" }],
     ["”", { left: "“", right: "”" }],
@@ -32,6 +34,8 @@ export const selectionInsertMap = new Map<string, { left: string; right: string 
     ["<", { left: "<", right: ">" }],
     ["（", { left: "（", right: "）" }],
     ["(", { left: "(", right: ")" }],
+    ["[", { left: "[", right: "]" }],
+    ["{", { left: "{", right: "}" }],
     // 引号
     ["“", { left: "“", right: "”" }],
     ["”", { left: "“", right: "”" }],
@@ -42,10 +46,14 @@ export const selectionInsertMap = new Map<string, { left: string; right: string 
     ['「', { left: '「', right: '」' }],
     ['『', { left: '『', right: '』' }],
     // Markdown 符号
+    ['￥', { left: '$', right: '$' }],
     ['$', { left: '$', right: '$' }],
+    ['·', { left: '`', right: '`' }],
     ['`', { left: '`', right: '`' }],
     ['～', { left: '~', right: '~' }],
     ['~', { left: '~', right: '~' }],
+    ['＊', { left: '*', right: '*' }],
+    ['*', { left: '*', right: '*' }],
 ]);
 
 export const continuousInputCorrectionRules: { input: string, env: string; result: string }[] = ([
@@ -62,8 +70,10 @@ export const continuousInputCorrectionRules: { input: string, env: string; resul
     { input: "》", env: "》", result: ">" },
     { input: "（", env: "（", result: "(|)" },
     { input: "（", env: "（|）", result: "(|)" },
+    { input: "）", env: "）", result: ")" },
     { input: "【", env: "【", result: "[|]" },
     { input: "【", env: "【|】", result: "[|]" },
+    { input: "】", env: "】", result: "]" },
     // 引号
     // 中英文引号全部映射到 ASCII 引号
     { input: "“", env: "“", result: "“|”" },
@@ -100,6 +110,7 @@ export const deletionRules: { left: string; right: string }[] = [
     { left: '《', right: '》' },
     { left: '（', right: '）' },
     { left: '(', right: ')' },
+    { left: '[', right: ']' },
     { left: '<', right: '>' },
     { left: '{', right: '}' },
     // 引号
