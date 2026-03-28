@@ -2,6 +2,7 @@ export const selectionReplaceMap = new Map<string, { left: string; right: string
     // 括号
     ["【", { left: "【", right: "】" }],
     ["《", { left: "《", right: "》" }],
+    ["〈", { left: "〈", right: "〉" }],
     ["<", { left: "<", right: ">" }],
     ["（", { left: "（", right: "）" }],
     ["(", { left: "(", right: ")" }],
@@ -31,6 +32,7 @@ export const selectionInsertMap = new Map<string, { left: string; right: string 
     // 括号
     ["【", { left: "【", right: "】" }],
     ["《", { left: "《", right: "》" }],
+    ["〈", { left: "〈", right: "〉" }],
     ["<", { left: "<", right: ">" }],
     ["（", { left: "（", right: "）" }],
     ["(", { left: "(", right: ")" }],
@@ -46,13 +48,9 @@ export const selectionInsertMap = new Map<string, { left: string; right: string 
     ['「', { left: '「', right: '」' }],
     ['『', { left: '『', right: '』' }],
     // Markdown 符号
-    ['￥', { left: '$', right: '$' }],
     ['$', { left: '$', right: '$' }],
-    ['·', { left: '`', right: '`' }],
     ['`', { left: '`', right: '`' }],
-    ['～', { left: '~', right: '~' }],
     ['~', { left: '~', right: '~' }],
-    ['＊', { left: '*', right: '*' }],
     ['*', { left: '*', right: '*' }],
 ]);
 
@@ -63,11 +61,17 @@ export const continuousInputCorrectionRules: { input: string, env: string; resul
      * result：替代的结果
      */
     // 括号
+    { input: "。", env: "..。", result: "…" },
     { input: "。", env: "。", result: "." },
-    { input: "。", env: "..", result: "…" },
+    { input: "，", env: "，", result: "," },
+    { input: "？", env: "？", result: "?" },
+    { input: "！", env: "！", result: "!" },
     { input: "《", env: "《|》", result: "<|>" },
     { input: "《", env: "《", result: "<" },
     { input: "》", env: "》", result: ">" },
+    { input: "〈", env: "〈|〉", result: "<|>" },
+    { input: "〈", env: "〈", result: "<" },
+    { input: "〉", env: "〉", result: ">" },
     { input: "（", env: "（", result: "(|)" },
     { input: "（", env: "（|）", result: "(|)" },
     { input: "）", env: "）", result: ")" },
@@ -89,6 +93,7 @@ export const continuousInputCorrectionRules: { input: string, env: string; resul
     //其它符号
     { input: "：", env: "：", result: ": " },
     { input: "、", env: "、", result: "\\" },
+    { input: "；", env: "；", result: ";" },
     // Markdown 符号
     { input: "￥", env: "￥", result: "$|$" },
     { input: "$", env: "$", result: "$|$" },
@@ -108,6 +113,7 @@ export const deletionRules: { left: string; right: string }[] = [
     // 括号
     { left: '【', right: '】' },
     { left: '《', right: '》' },
+    { left: '〈', right: '〉' },
     { left: '（', right: '）' },
     { left: '(', right: ')' },
     { left: '[', right: ']' },
