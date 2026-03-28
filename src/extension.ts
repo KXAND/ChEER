@@ -1,16 +1,14 @@
-// The module 'vscode' contains the VS Code extensibility API
-// Import the module and reference it with the alias vscode in your code below
-import { error } from 'console';
 import * as vscode from 'vscode';
-import { Selection } from 'vscode';
 import { continuousInputCorrectionRules, selectionInsertMap, selectionReplaceMap, deletionRules, multiLinesDeletionRules, cjkPairMap } from './rules';
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
-	vscode.workspace.onDidChangeTextDocument(event => {
-		handlePairedInsertion(event);
-	});
+	context.subscriptions.push(
+		vscode.workspace.onDidChangeTextDocument(event => {
+			void handlePairedInsertion(event);
+		})
+	);
 
 	context.subscriptions.push(vscode.commands.registerCommand('type', handleType));
 
@@ -23,14 +21,15 @@ export function deactivate() { }
 
 class debugOutput {
 	enableDebug: boolean | undefined = false;
-	private _output: vscode.OutputChannel;
+	private readonly _output: vscode.OutputChannel;
 	private static _instance: debugOutput;
 	constructor() {
 		this._output = vscode.window.createOutputChannel("ChEER Debug");
 	}
 	public static instance() {
-		if (!this._instance)
+		if (!this._instance) {
 			this._instance = new debugOutput();
+		}
 		return this._instance;
 	}
 	public static appendLine(str: string) {
@@ -67,9 +66,13 @@ class debugOutput {
 
 const checkCJKPunctuation = /^[？《》“”‘’；：【＊·】、，。…￥！（）]*$/;
 const checkLatin = /^(?=.*[A-Za-z])[A-Za-z']+$/;
-const checkUnvisiblePunctuation = /^[\s\u00A0\u200B]*$/;
 const Pos2Str = (pos: vscode.Position) => { return "(" + pos.line + ',' + pos.character + ")"; };
 const typeEvent2iEdit = (selection: vscode.Selection, text: string): iEdit => { return { range: selection, text: text, newRange: new vscode.Range(selection.start.translate(0, text.length), selection.start.translate(0, text.length)), delta: 0 }; };
+const isLanguageEnabled = (config: vscode.WorkspaceConfiguration, languageId: string): boolean => {
+	const languages = config.get<string[]>("activationOnLanguage", ["*"]);
+	return languages.includes("*") || languages.includes(languageId);
+};
+
 export interface iEdit {
 	range: vscode.Range;
 	text: string;
@@ -79,7 +82,7 @@ export interface iEdit {
 
 // 适用 type 的input main logic
 async function handleType(args: { text: string }) {
-	let editor = vscode.window.activeTextEditor;
+	const editor = vscode.window.activeTextEditor;
 	if (!editor) {
 		return;
 	}
@@ -95,14 +98,13 @@ async function handleType(args: { text: string }) {
 		return vscode.commands.executeCommand('default:type', args);
 	}
 
-	let languageId = editor.document.languageId;
-	let languages = config.get<string[]>("activationOnLanguage", ["*"]);
-	if ((languages.indexOf("*") === -1 && languages.indexOf(languageId) === -1)) {
+	const languageId = editor.document.languageId;
+	if (!isLanguageEnabled(config, languageId)) {
 		if (checkCJKPunctuation.test(text) === true && editor.selection.isEmpty) {
 			await vscode.commands.executeCommand('undo');
 		}
 		const edits = [...editor.selections].map(e => typeEvent2iEdit(e, text));
-		applyEdits(editor, edits)
+		await applyEdits(editor, edits);
 		return;
 	}
 
@@ -128,7 +130,7 @@ async function handleType(args: { text: string }) {
 	if (checkCJKPunctuation.test(text) === true && editor.selection.isEmpty) {
 		await vscode.commands.executeCommand('undo');
 	}
-	applyEdits(editor, edits);
+	await applyEdits(editor, edits);
 	return;
 }
 
@@ -210,56 +212,56 @@ function addContinuousInputCorrection2Edits(document: vscode.TextDocument, edit:
 	return edit;
 }
 
-function applyEdits(editor: vscode.TextEditor, edits: iEdit[]) {
-	if (edits.length > 0) {
-		editor.edit(editBuilder => {
-			for (const edit of edits) {
-				if (edit.range.isEmpty) {
-					debugOutput.appendLine("Insert bf：" + editor.document.lineAt(edit.range.start).text);
-					editBuilder.insert(edit.range.start, edit.text);
-				} else {
-					debugOutput.appendLine("Replace bf：" + editor.document.lineAt(edit.range.start).text);
-					editBuilder.replace(edit.range, edit.text);
-				}
-
-			}
-		}/*, {
-			undoStopBefore: true,  // 与上一个 stop 合并，不产生新的 stop
-			undoStopAfter: true     // 插入后再停一个，便于下一次 undo 控制
-		}*/).then(() => {
-			// 根据之前记录的顺序重建 selection（手动设置位置）
-			const cumulativeOffsets = new Map<vscode.Range, number>();
-			let totalDelta: Map<number, number> = new Map<number, number>();
-			edits.sort((a, b) => a.range.start.compareTo(b.range.start))//升序
-				.forEach(edit => {
-					// range受到的偏移量由开始行中前面的 range 决定
-					const line = edit.range.start.line;
-					const lineTotalDelta = totalDelta.get(line) || 0;
-					cumulativeOffsets.set(edit.range, lineTotalDelta);
-
-					// range 导致的偏移总是体现在结尾行
-					if (edit.range.isSingleLine) {
-						totalDelta.set(line, lineTotalDelta + edit.delta);
-					}
-					else {
-						totalDelta.set(edit.range.end.line, edit.delta);
-					}
-				});
-
-			const updatedSelections = edits.map(edit => {
-				debugOutput.appendLine("update selections:" + Pos2Str(edit.newRange.start) + " " + Pos2Str(edit.newRange.end));
-				debugOutput.appendLine("ranges:" + Pos2Str(edit.range.start) + " " + Pos2Str(edit.range.end));
-				const offsetDelta = cumulativeOffsets.get(edit.range);
-				if (offsetDelta === undefined || offsetDelta === null) {
-					throw vscode.window.showErrorMessage("offsetDelta should never be undefined");
-				}
-				const newStartPos = edit.newRange.start.translate(0, offsetDelta);
-				const newEndPos = edit.range.isSingleLine ? edit.newRange.end.translate(0, offsetDelta) : edit.newRange.end;
-				return new vscode.Selection(newStartPos, newEndPos);
-			});
-			editor.selections = updatedSelections;
-		});
+async function applyEdits(editor: vscode.TextEditor, edits: iEdit[]) {
+	if (edits.length === 0) {
+		return;
 	}
+
+	const didApply = await editor.edit(editBuilder => {
+		for (const edit of edits) {
+			if (edit.range.isEmpty) {
+				debugOutput.appendLine("Insert bf：" + editor.document.lineAt(edit.range.start.line).text);
+				editBuilder.insert(edit.range.start, edit.text);
+			} else {
+				debugOutput.appendLine("Replace bf：" + editor.document.lineAt(edit.range.start.line).text);
+				editBuilder.replace(edit.range, edit.text);
+			}
+		}
+	});
+
+	if (!didApply) {
+		vscode.window.showWarningMessage("ChEER failed to apply edits.");
+		return;
+	}
+
+	// 按位置计算偏移，但最终仍按原始 selections 顺序恢复光标，避免打乱主光标。
+	const indexedEdits = edits.map((edit, index) => ({ edit, index }));
+	const cumulativeOffsets = new Map<number, number>();
+	const totalDelta = new Map<number, number>();
+
+	indexedEdits
+		.slice()
+		.sort((a, b) => a.edit.range.start.compareTo(b.edit.range.start))
+		.forEach(({ edit, index }) => {
+			const line = edit.range.start.line;
+			const lineTotalDelta = totalDelta.get(line) || 0;
+			cumulativeOffsets.set(index, lineTotalDelta);
+
+			if (edit.range.isSingleLine) {
+				totalDelta.set(line, lineTotalDelta + edit.delta);
+			} else {
+				totalDelta.set(edit.range.end.line, edit.delta);
+			}
+		});
+
+	editor.selections = indexedEdits.map(({ edit, index }) => {
+		debugOutput.appendLine("update selections:" + Pos2Str(edit.newRange.start) + " " + Pos2Str(edit.newRange.end));
+		debugOutput.appendLine("ranges:" + Pos2Str(edit.range.start) + " " + Pos2Str(edit.range.end));
+		const offsetDelta = cumulativeOffsets.get(index) ?? 0;
+		const newStartPos = edit.newRange.start.translate(0, offsetDelta);
+		const newEndPos = edit.range.isSingleLine ? edit.newRange.end.translate(0, offsetDelta) : edit.newRange.end;
+		return new vscode.Selection(newStartPos, newEndPos);
+	});
 }
 /**
  * Selection：The selections in this text editor. The primary selection is always at index 0.
@@ -272,14 +274,13 @@ function applyEdits(editor: vscode.TextEditor, edits: iEdit[]) {
  */
 
 async function handleDeletion() {
-	let editor = vscode.window.activeTextEditor;
+	const editor = vscode.window.activeTextEditor;
 	if (!editor) { return vscode.commands.executeCommand('deleteLeft'); }
 
 	const config = vscode.workspace.getConfiguration('CHEER', editor.document.uri);
 
-	let languageId = editor.document.languageId;
-	let languages = config.get<string[]>("activationOnLanguage", ["*"]);
-	if ((languages.indexOf("*") === -1 && languages.indexOf(languageId) === -1)) {
+	const languageId = editor.document.languageId;
+	if (!isLanguageEnabled(config, languageId)) {
 		return vscode.commands.executeCommand('deleteLeft');
 	}
 
@@ -302,7 +303,7 @@ async function handleDeletion() {
 				const strBefore = document.getText(new vscode.Range(position.translate(0, -rule.left.length), position));
 				const strAfter = document.getText(new vscode.Range(position, position.translate(0, rule.right.length)));
 				if (rule.left === strBefore && rule.right === strAfter) {
-					const deleteRange = new vscode.Range(position.translate(0, -1), position.translate(0, 1));
+					const deleteRange = new vscode.Range(position.translate(0, -rule.left.length), position.translate(0, rule.right.length));
 					deletions.push(deleteRange);
 					pairedPositionNum += 1;
 					break;
@@ -363,7 +364,7 @@ async function handleDeletion() {
 }
 
 async function handlePairedInsertion(event: vscode.TextDocumentChangeEvent) {
-	let editor = vscode.window.activeTextEditor;
+	const editor = vscode.window.activeTextEditor;
 	if (!editor || (editor && event.document !== editor.document)) {
 		return;
 	}
