@@ -19,7 +19,16 @@
   },
   "main": "./out/extension.js",
   "contributes": {
-    "commands": [],
+    "commands": [
+      {
+        "command": "CHEER.SmartDelete",
+        "title": "ChEER Smart Delete"
+      },
+      {
+        "command": "CHEER.PanguFormat",
+        "title": "ChEER Pangu Format"
+      }
+    ],
     "keybindings": [
       {
         "command": "CHEER.SmartDelete",

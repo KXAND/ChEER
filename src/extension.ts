@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { continuousInputCorrectionRules, selectionInsertMap, selectionReplaceMap, deletionRules, multiLinesDeletionRules, cjkPairMap } from './rules';
+import { handlePanguFormat } from './commands/PanguFormat';
 
 class CompositionState {
 	isInComposition: boolean = false;
@@ -47,6 +48,7 @@ export function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(vscode.commands.registerCommand('undo', handleUndo));
 
 	context.subscriptions.push(vscode.commands.registerCommand('CHEER.SmartDelete', handleDeletion));
+	context.subscriptions.push(vscode.commands.registerCommand('CHEER.PanguFormat', handlePanguFormat));
 }
 
 // This method is called when your extension is deactivated
