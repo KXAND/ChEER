@@ -3,7 +3,7 @@
   "displayName": "ChEER: Chinese Editing Enhancment & Refinement",
   "description": "Enhance your Chinese Editing Experience.",
   "publisher": "Quicsand",
-  "version": "0.0.12",
+  "version": "0.1.0",
   "engines": {
     "vscode": "^1.101.0"
   },
