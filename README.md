@@ -1,8 +1,8 @@
 # ChEER: Chinese Editing Enhancement & Refinement
 
-[中文] | English(./README-EN.md)
+中文 | [English](./README-EN.md)
 
-启发自 [Yaozhuwa/easy-typing-obsidian](https://github.com/Yaozhuwa/easy-typing-obsidian)，**ChEER** 是一个旨在增强中文编辑体验的 VSCode 插件。
+启发自 [Yaozhuwa/easy-typing-obsidian](https://github.com/Yaozhuwa/easy-typing-obsidian)，**ChEER** 是一个旨在增强中文编辑体验的 VS Code 插件。
 
 ---
 
@@ -20,7 +20,7 @@
 ## 已知的问题
 
 1. 可能需要多次 undo 才能撤回中文输入；
-2. 配对删除功能可能和其他劫持了退格键的插件冲突，例如，`Markdown All in One`。如果希望启用 ChEER 的成对删除，你必须调你的 VSCode 设置，例如，按下 `Ctrl + Shift + P`，输入并选择 `Preferences: Open Keyboard Shortcuts (JSON)`，然后添加如下用户级覆盖：
+2. 配对删除功能可能和其他劫持了退格键的插件冲突，例如，`Markdown All in One`。如果希望启用 ChEER 的成对删除，你必须调你的 VS Code 设置，例如，按下 `Ctrl + Shift + P`，输入并选择 `Preferences: Open Keyboard Shortcuts (JSON)`，然后添加如下用户级覆盖：
 
    ```json
     {

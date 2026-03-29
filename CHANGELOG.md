@@ -4,6 +4,10 @@ All notable changes to the "easy-typing-vscode" extension will be documented in 
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## v0.1.1 2026-3-29
+
+- 修正了一些文本问题。
+
 ## v0.1.0 2026-3-29
 
 - 参照 Vim 插件的形式，优化了编辑的的稳定性。

@@ -1,9 +1,9 @@
 {
   "name": "cheer",
-  "displayName": "ChEER: Chinese Editing Enhancment & Refinement",
+  "displayName": "ChEER: Chinese Editing Enhancement & Refinement",
   "description": "Enhance your Chinese Editing Experience.",
   "publisher": "Quicsand",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "engines": {
     "vscode": "^1.101.0"
   },
