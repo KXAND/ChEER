@@ -6,3 +6,6 @@ node_modules
 testText.txt
 .vscode
 package-lock.json
+
+# references
+ref/
