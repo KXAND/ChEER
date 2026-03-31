@@ -236,5 +236,57 @@ suite('Extension Test Suite', () => {
 			await vscode.commands.executeCommand('CHEER.PanguFormat');
 			assert.strictEqual(documentText(editor), '陈睿说：“bilibili, cheers!”。');
 		});
+		// 混合
+		test('Pangu.case7.5', async () => {
+			const input = [
+				'# ChEER： Chinese Editing Enhancement & Refinement',
+				'',
+				'	中文 | [English](./README-EN.md)',
+				'',
+				'	启发自[Yaozhuwa/easy-typing-obsidian](https://github.com/Yaozhuwa/easy-typing-obsidian)， **ChEER** 是一个旨在增强中文编辑体验的VS Code插件。',
+				'',
+			].join('\n');
+			const expected = [
+				'# ChEER: Chinese Editing Enhancement & Refinement',
+				'',
+				'	中文 | [English](./README-EN.md)',
+				'',
+				'	启发自 [Yaozhuwa/easy-typing-obsidian](https://github.com/Yaozhuwa/easy-typing-obsidian)，**ChEER** 是一个旨在增强中文编辑体验的 VS Code 插件。',
+				'',
+			].join('\n');
+			const editor = await createEditor(input);
+
+			await vscode.commands.executeCommand('CHEER.PanguFormat');
+			assert.strictEqual(documentText(editor), expected);
+		});
+		test('Pangu.case7.6', async () => {
+			const editor = await createEditor('\t今天买了iPhone  \n\t版本是２．０。 That\'s a pretty great phone!！\t');
+
+			await vscode.commands.executeCommand('CHEER.PanguFormat');
+			assert.strictEqual(documentText(editor), '\t今天买了 iPhone  \n\t版本是 2.0。 That\'s a pretty great phone!!\t');
+		});
+		test('Pangu.case7.7', async () => {
+			const editor = await createEditor('前缀 今天买了iPhone 后缀');
+
+			await vscode.commands.executeCommand('CHEER.PanguFormat');
+			assert.strictEqual(documentText(editor), '前缀 今天买了 iPhone 后缀');
+		});
+		test('Pangu.case7.8', async () => {
+			const editor = await createEditor('任何在`包裹内的.句子, 都不应该被处理`.');
+
+			await vscode.commands.executeCommand('CHEER.PanguFormat');
+			assert.strictEqual(documentText(editor), '任何在 `包裹内的.句子, 都不应该被处理`.');
+		});
+		test('Pangu.case7.9', async () => {
+			const editor = await createEditor('这是一个测试, hello world');
+
+			await vscode.commands.executeCommand('CHEER.PanguFormat');
+			assert.strictEqual(documentText(editor), '这是一个测试，hello world');
+		});
+		test('Pangu.case7.10', async () => {
+			const editor = await createEditor('good good study, day day up. 这句话的意思是"好好学习,天天向上".');
+			await vscode.commands.executeCommand('CHEER.PanguFormat');
+			assert.strictEqual(documentText(editor), 'good good study, day day up. 这句话的意思是“好好学习，天天向上”。');
+		});
 	});
 });
